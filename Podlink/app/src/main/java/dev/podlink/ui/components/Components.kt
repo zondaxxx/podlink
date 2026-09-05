@@ -46,6 +46,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -207,8 +208,13 @@ fun SectionCard(title: String? = null, modifier: Modifier = Modifier, content: @
 fun HeroCard(state: PodsState, modifier: Modifier = Modifier, artSize: Dp = 200.dp) {
     val s = state
     Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+        var shine by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+        androidx.compose.runtime.LaunchedEffect(s.connected) { if (s.connected) shine++ }
         Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            PodsArt(s.model, s.leftInEar || s.isHeadphones, s.rightInEar || s.isHeadphones, s.lidOpen, artSize)
+            PodsArt(
+                s.model, s.leftInEar || s.isHeadphones, s.rightInEar || s.isHeadphones, s.lidOpen, artSize,
+                charging = s.leftCharging || s.rightCharging || s.caseCharging, shineTrigger = shine,
+            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
                 fun eta(level: Int?): Int? = level?.let { (100 - it) * s.model.podFullChargeMinutes / 100 }
                 if (s.isHeadphones) {

@@ -93,6 +93,9 @@ class PopupActivity : ComponentActivity() {
                 val offset = remember { Animatable(0f) }
                 val scope = rememberCoroutineScope()
                 fun close() { scope.launch { visible = false; delay(220); finish() } }
+                // iOS-style: the case appears closed and the lid springs open a beat later.
+                var lidAnim by remember { mutableStateOf(false) }
+                LaunchedEffect(s.lidOpen) { lidAnim = false; delay(350); lidAnim = s.lidOpen || s.connected }
                 LaunchedEffect(Unit) {
                     visible = true
                     val steps = duration * 20
@@ -135,7 +138,7 @@ class PopupActivity : ComponentActivity() {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 AnimatedVisibility(visible, enter = scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn()) {
-                                    PodsArt(s.model, s.leftInEar || s.isHeadphones, s.rightInEar || s.isHeadphones, s.lidOpen, 150.dp)
+                                    PodsArt(s.model, s.leftInEar || s.isHeadphones, s.rightInEar || s.isHeadphones, lidAnim, 160.dp, charging = s.leftCharging || s.rightCharging || s.caseCharging, shineTrigger = 1)
                                 }
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
                                     if (s.isHeadphones) Staggered(visible, 0) { BatteryPill(s.single, s.leftCharging, s.model.label, compact = true) }

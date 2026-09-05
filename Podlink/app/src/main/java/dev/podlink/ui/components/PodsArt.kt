@@ -1,5 +1,22 @@
 package dev.podlink.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.TransformOrigin
+import dev.podlink.ui.theme.Mint
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -40,29 +57,24 @@ import dev.podlink.ble.PodsModel
  * instead, so real renders can be dropped in without touching code.
  */
 @Composable
-fun PodsArt(model: PodsModel, leftInEar: Boolean, rightInEar: Boolean, lidOpen: Boolean, size: Dp = 200.dp) {
+fun PodsArt(
+    model: PodsModel,
+    leftInEar: Boolean,
+    rightInEar: Boolean,
+    lidOpen: Boolean,
+    size: Dp = 200.dp,
+    charging: Boolean = false,
+    /** Bump this value to play the "shine" sweep (used on connection). */
+    shineTrigger: Int = 0,
+    floating: Boolean = true,
+) {
     val ctx = LocalContext.current
     val family = model.family
     val resId = remember(family) { ctx.resources.getIdentifier("pods_" + family.name.lowercase(), "drawable", ctx.packageName) }
     val softSpring = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
     val lidT by animateFloatAsState(if (lidOpen) 1f else 0f, softSpring, label = "lid")
     if (resId != 0) {
-        // Real render: breathe a little when the case opens, glow when a bud is worn.
-        val worn by animateFloatAsState(if (leftInEar || rightInEar) 1f else 0f, softSpring, label = "worn")
-        val glow = MaterialTheme.colorScheme.primary
-        Box(Modifier.size(size), contentAlignment = androidx.compose.ui.Alignment.Center) {
-            Canvas(Modifier.size(size)) {
-                if (worn > 0.02f) drawCircle(
-                    Brush.radialGradient(listOf(glow.copy(alpha = 0.28f * worn), glow.copy(alpha = 0f))),
-                    radius = this.size.minDimension * 0.48f,
-                )
-            }
-            Image(
-                painterResource(resId), null,
-                Modifier.size(size).graphicsLayer { val sc = 1f + 0.04f * lidT; scaleX = sc; scaleY = sc },
-                contentScale = ContentScale.Fit,
-            )
-        }
+        RenderArt(resId, family, lidT, leftInEar || rightInEar, charging, shineTrigger, floating, size)
         return
     }
     val leftT by animateFloatAsState(if (leftInEar) 1f else 0f, softSpring, label = "left")
@@ -80,6 +92,149 @@ fun PodsArt(model: PodsModel, leftInEar: Boolean, rightInEar: Boolean, lidOpen: 
                 PodsModel.Family.AIRPODS_CLASSIC -> drawAirPods(palette, Style.CLASSIC, leftT, rightT, lidT)
                 PodsModel.Family.AIRPODS_3 -> drawAirPods(palette, Style.GEN3, leftT, rightT, lidT)
                 PodsModel.Family.AIRPODS_PRO, PodsModel.Family.GENERIC -> drawAirPods(palette, Style.PRO, leftT, rightT, lidT)
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Real render + "Apple-style" motion: 3D lid, float, shine sweep, charging glow
+// ---------------------------------------------------------------------------------------------
+
+/** Geometry of the case in a render, measured from its alpha channel (fractions of the image). */
+private data class RenderGeometry(val top: Float, val hinge: Float, val left: Float, val right: Float, val bodyColor: Color)
+
+/** Where the lid meets the body in each family's render (fraction of image height); null = no lid to animate. */
+private fun hingeFraction(family: PodsModel.Family): Float? = when (family) {
+    PodsModel.Family.AIRPODS_PRO, PodsModel.Family.AIRPODS_3 -> 0.42f
+    PodsModel.Family.AIRPODS_CLASSIC -> 0.33f
+    PodsModel.Family.BEATS_BUDS -> 0.44f
+    else -> null
+}
+
+private fun measure(ctx: android.content.Context, resId: Int, hingeFrac: Float): RenderGeometry? = runCatching {
+    val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = 4 }
+    val bmp = android.graphics.BitmapFactory.decodeResource(ctx.resources, resId, opts) ?: return null
+    val w = bmp.width; val h = bmp.height
+    fun alpha(x: Int, y: Int) = (bmp.getPixel(x.coerceIn(0, w - 1), y.coerceIn(0, h - 1)) ushr 24) and 0xFF
+    var top = -1
+    loop@ for (y in 0 until h) for (x in 0 until w step 2) if (alpha(x, y) > 40) { top = y; break@loop }
+    if (top < 0) return null
+    val hy = (h * hingeFrac).toInt()
+    var l = -1; var r = -1
+    for (x in 0 until w) if (alpha(x, hy) > 40) { l = x; break }
+    for (x in w - 1 downTo 0) if (alpha(x, hy) > 40) { r = x; break }
+    if (l < 0 || r <= l) return null
+    // body colour: average a small patch below the hinge in the middle
+    var rr = 0; var gg = 0; var bb = 0; var n = 0
+    val cy = (h * (hingeFrac + 0.12f)).toInt()
+    for (dy in -3..3) for (dx in -6..6) {
+        val p = bmp.getPixel((w / 2 + dx).coerceIn(0, w - 1), (cy + dy).coerceIn(0, h - 1))
+        if ((p ushr 24) and 0xFF > 200) { rr += (p shr 16) and 0xFF; gg += (p shr 8) and 0xFF; bb += p and 0xFF; n++ }
+    }
+    val body = if (n > 0) Color(rr / n, gg / n, bb / n) else Color(0xFFEDEFF3)
+    bmp.recycle()
+    RenderGeometry(top.toFloat() / h, hingeFrac, l.toFloat() / w, (r + 1).toFloat() / w, body)
+}.getOrNull()
+
+@Composable
+private fun RenderArt(resId: Int, family: PodsModel.Family, lidT: Float, worn: Boolean, charging: Boolean, shineTrigger: Int, floating: Boolean, size: Dp) {
+    val ctx = LocalContext.current
+    val geo = remember(resId) { hingeFraction(family)?.let { measure(ctx, resId, it) } }
+    val softSpring = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+    val wornT by animateFloatAsState(if (worn) 1f else 0f, softSpring, label = "worn")
+    val glow = MaterialTheme.colorScheme.primary
+    val chargeColor = Mint
+
+    // idle float: a slow 4 s breathing motion, only while composed on screen
+    val floatY: Float = if (floating) {
+        val t = rememberInfiniteTransition(label = "float")
+        t.animateFloat(-1f, 1f, infiniteRepeatable(tween(2000, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "y").value
+    } else 0f
+    // charging glow pulse
+    val pulse: Float = if (charging) {
+        val t = rememberInfiniteTransition(label = "pulse")
+        t.animateFloat(0.35f, 1f, infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "p").value
+    } else 0f
+    // shine sweep: runs once per trigger
+    val shine = remember { Animatable(-0.6f) }
+    LaunchedEffect(shineTrigger) { if (shineTrigger > 0) { shine.snapTo(-0.6f); shine.animateTo(1.6f, tween(1100, easing = FastOutSlowInEasing)) } }
+
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+        // glow behind the case
+        Canvas(Modifier.size(size)) {
+            val r = this.size.minDimension * 0.5f
+            if (pulse > 0f) drawCircle(Brush.radialGradient(listOf(chargeColor.copy(alpha = 0.30f * pulse), chargeColor.copy(alpha = 0f))), radius = r, center = Offset(this.size.width / 2, this.size.height * 0.62f))
+            if (wornT > 0.02f) drawCircle(Brush.radialGradient(listOf(glow.copy(alpha = 0.26f * wornT), glow.copy(alpha = 0f))), radius = r * 0.9f, center = Offset(this.size.width / 2, this.size.height * 0.4f))
+        }
+        Box(
+            Modifier
+                .size(size)
+                .graphicsLayer {
+                    translationY = floatY * 3.dp.toPx()
+                    val sc = 1f + 0.03f * lidT
+                    scaleX = sc; scaleY = sc
+                },
+        ) {
+            // the render, with a shine band composited only onto its opaque pixels
+            Image(
+                painterResource(resId), null,
+                Modifier
+                    .size(size)
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        val x = shine.value
+                        if (x > -0.5f && x < 1.5f) {
+                            val w = this.size.width
+                            drawRect(
+                                Brush.linearGradient(
+                                    0f to Color.Transparent, 0.45f to Color.White.copy(alpha = 0.0f), 0.5f to Color.White.copy(alpha = 0.55f), 0.55f to Color.White.copy(alpha = 0.0f), 1f to Color.Transparent,
+                                    start = Offset(w * (x - 0.4f), 0f), end = Offset(w * (x + 0.4f), this.size.height),
+                                ),
+                                blendMode = BlendMode.SrcAtop,
+                            )
+                        }
+                    },
+                contentScale = ContentScale.Fit,
+            )
+            // the lid: a glossy cap the exact size of the render's lid, hinged at the bottom, swinging in 3D
+            if (geo != null) {
+                val angle = 105f * lidT
+                val capAlpha = 1f - ((angle - 60f) / 45f).coerceIn(0f, 1f)
+                if (capAlpha > 0.01f) {
+                    val capW = size * (geo.right - geo.left)
+                    val capH = size * (geo.hinge - geo.top)
+                    Box(
+                        Modifier
+                            .offset(x = size * geo.left, y = size * geo.top)
+                            .size(capW, capH)
+                            .graphicsLayer {
+                                transformOrigin = TransformOrigin(0.5f, 1f)
+                                rotationX = angle
+                                cameraDistance = 14f * density
+                                alpha = capAlpha
+                            },
+                    ) {
+                        Canvas(Modifier.fillMaxSize()) {
+                            val w = this.size.width; val h = this.size.height
+                            val body = geo.bodyColor
+                            val light = Color(
+                                (body.red + (1f - body.red) * 0.55f), (body.green + (1f - body.green) * 0.55f), (body.blue + (1f - body.blue) * 0.55f),
+                            )
+                            val dark = Color(body.red * 0.82f, body.green * 0.82f, body.blue * 0.84f)
+                            val path = Path().apply {
+                                addRoundRect(RoundRect(0f, 0f, w, h, CornerRadius(w * 0.16f, w * 0.16f), CornerRadius(w * 0.16f, w * 0.16f), CornerRadius(w * 0.04f, w * 0.04f), CornerRadius(w * 0.04f, w * 0.04f)))
+                            }
+                            drawPath(path, Brush.verticalGradient(listOf(light, body, dark)))
+                            drawPath(path, Color.Black.copy(alpha = 0.10f), style = Stroke(1.5f))
+                            // gloss highlight
+                            drawRoundRect(Color.White.copy(alpha = 0.35f), Offset(w * 0.10f, h * 0.14f), Size(w * 0.55f, h * 0.18f), CornerRadius(h * 0.09f))
+                            // seam at the hinge
+                            drawLine(Color.Black.copy(alpha = 0.18f), Offset(w * 0.04f, h - 1f), Offset(w * 0.96f, h - 1f), 2f)
+                        }
+                    }
+                }
             }
         }
     }
