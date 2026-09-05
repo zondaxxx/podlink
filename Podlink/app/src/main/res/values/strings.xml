@@ -266,4 +266,5 @@
     <string name="root_hint">Share the stack library to get a PSM 0x1001 patch prepared for exactly this firmware.</string>
     <string name="root_share_lib">Share libbluetooth.so</string>
     <string name="stats_line">Service starts: %1$d · killed by the system: %2$d · last start %3$s</string>
+    <string name="ev_ear">In ear: L %1$s  R %2$s</string>
 </resources>

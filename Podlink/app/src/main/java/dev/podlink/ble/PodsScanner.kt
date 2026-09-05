@@ -14,12 +14,13 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Filtered BLE scan for Apple Proximity Pairing frames plus "beacon locking".
+ * Filtered BLE scan for Apple Proximity Pairing frames plus "ours vs. theirs" selection.
  *
- * Every AirPods around you advertises with a random address that rotates every ~15 minutes, so we
- * (1) lock onto the strongest beacon of a compatible model, (2) follow it across address rotations by
- * a loose fingerprint (model + colour + battery pair + case), and (3) prefer frames broadcast from
- * inside the case, which carry authoritative lid/case data (CAPod's approach).
+ * One pair of AirPods is really several beacons: the pod inside the case (with lid/case data) and every
+ * pod outside the case (with in-ear data), each on its own rotating random address. Locking on a single
+ * address therefore loses half of the picture, so instead every frame of the expected model family whose
+ * signal is within [ACCEPT_WINDOW_DB] of the strongest recent frame is accepted and merged by the service.
+ * Strangers' AirPods almost always sit well below that window (and usually are a different model anyway).
  */
 @SuppressLint("MissingPermission")
 class PodsScanner(private val context: Context) {
@@ -28,11 +29,15 @@ class PodsScanner(private val context: Context) {
         private const val TAG = "PodsScanner"
         /** Android allows 5 scan starts per 30 s; we never restart faster than this. */
         private const val MIN_RESTART_INTERVAL_MS = 7_000L
+        /** Frames this much weaker than the strongest recent one are treated as someone else's. */
+        private const val ACCEPT_WINDOW_DB = 12
+        /** How long the "strongest recent frame" reference lives. */
+        private const val BEST_TTL_MS = 12_000L
     }
 
     enum class Mode { OFF, LOW_POWER, BALANCED, AGGRESSIVE }
 
-    data class Beacon(val address: String, val model: PodsModel, val rawModelId: Int, val rssi: Int, val lastSeen: Long, val rawHex: String, val packet: ProximityPacket)
+    data class Beacon(val address: String, val model: PodsModel, val rawModelId: Int, val rssi: Int, val lastSeen: Long, val rawHex: String, val packet: ProximityPacket, val ours: Boolean)
     data class Stats(
         val started: Long = 0,
         val packets: Int = 0,
@@ -48,8 +53,12 @@ class PodsScanner(private val context: Context) {
     /** Every decoded status frame, including other people's AirPods (radar / diagnostics). */
     val allPackets = _packets.asSharedFlow()
 
+    private val _accepted = MutableSharedFlow<ProximityPacket>(extraBufferCapacity = 64)
+    /** Frames judged to be from our headset (any of its beacons). */
+    val accepted = _accepted.asSharedFlow()
+
     private val _locked = MutableStateFlow<ProximityPacket?>(null)
-    /** The packet from the beacon we currently believe is *our* device. */
+    /** Last accepted frame (kept for UI/diagnostics). */
     val locked = _locked.asStateFlow()
 
     private val _mode = MutableStateFlow(Mode.OFF)
@@ -60,20 +69,20 @@ class PodsScanner(private val context: Context) {
 
     /** Model we expect (from the connected / bonded classic device). UNKNOWN = accept anything. */
     var expectedModel: PodsModel = PodsModel.UNKNOWN
-    /** Beacons weaker than this are never locked onto (dBm). */
+    /** Frames weaker than this are never accepted (dBm). */
     var minRssi: Int = -85
-    /** Lock is dropped when no packet from the locked identity arrives for this long. */
-    var lockTimeoutMs: Long = 15_000
     /** Force software-only filtering (compatibility mode). */
     var forceUnfiltered: Boolean = false
 
     private var unfilteredFallback = false
-    private var lockedAddress: String? = null
-    private var lockedFingerprint: String? = null
-    private var lockedRssiEma = -100.0
-    private var lastLockedSeen = 0L
+    private var bestRssi = -127
+    private var bestAt = 0L
+    private var lastAcceptedAt = 0L
     private var lastStart = 0L
     private var pendingMode: Mode? = null
+
+    /** Addresses accepted recently, so the nearby list can tell ours from theirs. */
+    private val ourAddresses = HashMap<String, Long>()
 
     private val callback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) = handle(result)
@@ -90,53 +99,43 @@ class PodsScanner(private val context: Context) {
         val st = _stats.value
         val pkt = ProximityPacket.parse(data, result.rssi, result.device.address)
         if (pkt == null) { _stats.value = st.copy(appleFrames = st.appleFrames + 1); return }
+        val ours = consider(pkt)
         val hex = data.joinToString(" ") { "%02X".format(it) }
         val beacons = st.beacons.filterValues { pkt.timestamp - it.lastSeen < 60_000 } +
-            (pkt.address to Beacon(pkt.address, pkt.model, pkt.rawModelId, pkt.rssi, pkt.timestamp, hex, pkt))
+            (pkt.address to Beacon(pkt.address, pkt.model, pkt.rawModelId, pkt.rssi, pkt.timestamp, hex, pkt, ours))
         _stats.value = st.copy(packets = st.packets + 1, appleFrames = st.appleFrames + 1, beacons = beacons)
         _packets.tryEmit(pkt)
-        considerLock(pkt)
+        if (ours) { _locked.value = pkt; _accepted.tryEmit(pkt) }
     }
 
-    private fun considerLock(pkt: ProximityPacket) {
+    /** Decide whether this frame belongs to our headset. */
+    private fun consider(pkt: ProximityPacket): Boolean {
         val now = System.currentTimeMillis()
-        if (lockedAddress != null && now - lastLockedSeen > lockTimeoutMs) {
-            lockedAddress = null; lockedFingerprint = null; _locked.value = null
-        }
-        if (!expectedModel.sameFamily(pkt.model)) return
-        if (pkt.left == null && pkt.right == null && pkt.case == null) return
-
-        val sameAddress = lockedAddress == pkt.address
-        val sameIdentity = !sameAddress && lockedFingerprint != null && lockedFingerprint == pkt.fingerprint && pkt.rssi > lockedRssiEma - 15
-        if (sameAddress || sameIdentity) {
-            if (sameIdentity) Log.i(TAG, "followed address rotation ${lockedAddress} -> ${pkt.address}")
-            lockedAddress = pkt.address
-            lockedFingerprint = pkt.fingerprint
-            lockedRssiEma = lockedRssiEma * 0.7 + pkt.rssi * 0.3
-            lastLockedSeen = now
-            _locked.value = pkt
-            return
-        }
-        if (pkt.rssi < minRssi) return
-        // Adopt a different beacon only when it is clearly stronger (hysteresis) or nothing is locked.
-        if (lockedAddress == null || pkt.rssi > lockedRssiEma + 8) {
-            lockedAddress = pkt.address
-            lockedFingerprint = pkt.fingerprint
-            lockedRssiEma = pkt.rssi.toDouble()
-            lastLockedSeen = now
-            _locked.value = pkt
-        }
+        if (!expectedModel.sameFamily(pkt.model)) return false
+        if (pkt.left == null && pkt.right == null && pkt.case == null) return false
+        if (pkt.rssi < minRssi) return false
+        if (now - bestAt > BEST_TTL_MS) bestRssi = -127
+        if (pkt.rssi > bestRssi) { bestRssi = pkt.rssi; bestAt = now }
+        // Known beacon of ours seen within the TTL: keep following it even through a dip.
+        val known = ourAddresses[pkt.address]?.let { now - it < BEST_TTL_MS * 2 } == true
+        val accepted = known || pkt.rssi >= bestRssi - ACCEPT_WINDOW_DB
+        if (accepted) { ourAddresses[pkt.address] = now; lastAcceptedAt = now }
+        if (ourAddresses.size > 16) ourAddresses.entries.removeIf { now - it.value > BEST_TTL_MS * 4 }
+        return accepted
     }
 
-    fun resetLock() { lockedAddress = null; lockedFingerprint = null; _locked.value = null }
+    fun isOurs(address: String): Boolean = ourAddresses[address]?.let { System.currentTimeMillis() - it < BEST_TTL_MS * 2 } == true
 
-    /** True when the locked beacon has been silent for [ms]. */
-    fun lockedSilentFor(ms: Long): Boolean = lockedAddress != null && System.currentTimeMillis() - lastLockedSeen > ms
+    fun resetLock() { bestRssi = -127; bestAt = 0; ourAddresses.clear(); _locked.value = null }
+
+    /** True when no frame of ours arrived for [ms]. */
+    fun lockedSilentFor(ms: Long): Boolean = lastAcceptedAt != 0L && System.currentTimeMillis() - lastAcceptedAt > ms
 
     /** Called periodically by the service: if the hardware filter delivers nothing, fall back to an unfiltered scan. */
     fun checkHealth() {
         val st = _stats.value
         if (_mode.value == Mode.OFF) { pendingMode?.let { pendingMode = null; start(it) }; return }
+        pendingMode?.let { if (System.currentTimeMillis() - lastStart >= MIN_RESTART_INTERVAL_MS) { pendingMode = null; restart(it) } }
         if (unfilteredFallback || forceUnfiltered) return
         if (st.packets == 0 && st.appleFrames == 0 && System.currentTimeMillis() - st.started > 25_000) {
             Log.w(TAG, "no Apple frames in 25s with hardware filter → unfiltered fallback")
@@ -153,10 +152,10 @@ class PodsScanner(private val context: Context) {
 
     private fun restart(mode: Mode) {
         val now = System.currentTimeMillis()
-        if (now - lastStart < MIN_RESTART_INTERVAL_MS) {
+        if (now - lastStart < MIN_RESTART_INTERVAL_MS && _mode.value != Mode.OFF) {
             // Too soon after the previous start: remember the wish, checkHealth() applies it later.
             pendingMode = mode
-            if (_mode.value != Mode.OFF) return
+            return
         }
         val scanner = adapter?.bluetoothLeScanner ?: run { Log.w(TAG, "no LE scanner"); return }
         if (_mode.value != Mode.OFF) runCatching { scanner.stopScan(callback) }

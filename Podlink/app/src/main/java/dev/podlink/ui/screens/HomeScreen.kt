@@ -207,7 +207,7 @@ private fun RadarCard(s: PodsState) {
     LaunchedEffect(svc) {
         val sc = svc?.scanner ?: return@LaunchedEffect
         launch {
-            sc.allPackets.filter { p -> sc.locked.value?.address == p.address || (sc.locked.value == null && sc.expectedModel.sameFamily(p.model)) }
+            sc.allPackets.filter { p -> sc.isOurs(p.address) || sc.expectedModel.sameFamily(p.model) }
                 .collect { p -> rssi = (rssi?.let { (it * 0.6 + p.rssi * 0.4).toInt() } ?: p.rssi); lastSeen = System.currentTimeMillis() }
         }
         val vib = ctx.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator

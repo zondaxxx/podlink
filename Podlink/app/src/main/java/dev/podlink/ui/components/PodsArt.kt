@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -43,12 +44,27 @@ fun PodsArt(model: PodsModel, leftInEar: Boolean, rightInEar: Boolean, lidOpen: 
     val ctx = LocalContext.current
     val family = model.family
     val resId = remember(family) { ctx.resources.getIdentifier("pods_" + family.name.lowercase(), "drawable", ctx.packageName) }
-    if (resId != 0) {
-        Image(painterResource(resId), null, Modifier.size(size), contentScale = ContentScale.Fit)
-        return
-    }
     val softSpring = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
     val lidT by animateFloatAsState(if (lidOpen) 1f else 0f, softSpring, label = "lid")
+    if (resId != 0) {
+        // Real render: breathe a little when the case opens, glow when a bud is worn.
+        val worn by animateFloatAsState(if (leftInEar || rightInEar) 1f else 0f, softSpring, label = "worn")
+        val glow = MaterialTheme.colorScheme.primary
+        Box(Modifier.size(size), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            Canvas(Modifier.size(size)) {
+                if (worn > 0.02f) drawCircle(
+                    Brush.radialGradient(listOf(glow.copy(alpha = 0.28f * worn), glow.copy(alpha = 0f))),
+                    radius = this.size.minDimension * 0.48f,
+                )
+            }
+            Image(
+                painterResource(resId), null,
+                Modifier.size(size).graphicsLayer { val sc = 1f + 0.04f * lidT; scaleX = sc; scaleY = sc },
+                contentScale = ContentScale.Fit,
+            )
+        }
+        return
+    }
     val leftT by animateFloatAsState(if (leftInEar) 1f else 0f, softSpring, label = "left")
     val rightT by animateFloatAsState(if (rightInEar) 1f else 0f, softSpring, label = "right")
     val dark = isSystemInDarkTheme()

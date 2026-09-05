@@ -171,7 +171,7 @@ class PodsService : Service() {
         }
         scope.launch { monitor.bluetoothOn.collect { on -> PodsRepo.update { copy(bluetoothOn = on) }; applyScanPolicy() } }
         scope.launch { monitor.connected.collect { onConnectionChanged(it) } }
-        scope.launch { scanner.locked.collect { pkt -> if (pkt != null) onPacket(pkt) } }
+        scope.launch { scanner.accepted.collect { pkt -> onPacket(pkt) } }
         scope.launch { scanner.mode.collect { m -> PodsRepo.update { copy(scanning = m != PodsScanner.Mode.OFF) } } }
         scope.launch { scanner.allPackets.collect { p -> if (!settings.autoConnectOnLidOpen) return@collect; onAnyPacket(p) } }
         scope.launch { aap.state.collect { st -> PodsRepo.update { copy(aapState = st, noiseMode = if (st == AapClient.State.CONNECTED) noiseMode else null) }; refreshNotification() } }
@@ -284,8 +284,12 @@ class PodsService : Service() {
             prevLid = p.lidState
         }
 
+        val now = PodsRepo.state.value
+        if (before.leftInEar != now.leftInEar || before.rightInEar != now.rightInEar) {
+            PodsRepo.emit(getString(R.string.ev_ear, if (now.leftInEar) "●" else "○", if (now.rightInEar) "●" else "○"))
+        }
         if (connected) {
-            handleEarDetection(p.leftInEar, p.rightInEar)
+            handleEarDetection(now.leftInEar, now.rightInEar)
             handleBatteryAlerts(PodsRepo.state.value)
             db.record(Sample(p.timestamp, p.left, p.right, p.case, p.leftCharging, p.rightCharging, p.caseCharging, p.leftInEar, p.rightInEar))
             broadcast("BATTERY")
@@ -305,10 +309,9 @@ class PodsService : Service() {
     }
 
     private fun updateNearby() {
-        val lockedAddr = scanner.locked.value?.address
         val now = System.currentTimeMillis()
         val list = scanner.stats.value.beacons.values
-            .filter { it.address != lockedAddr && now - it.lastSeen < 30_000 }
+            .filter { !it.ours && !scanner.isOurs(it.address) && now - it.lastSeen < 30_000 }
             .sortedByDescending { it.rssi }
             .take(5)
             .map { NearbyDevice(it.address, it.model, it.rssi, it.lastSeen, it.packet.left, it.packet.right, it.packet.case) }

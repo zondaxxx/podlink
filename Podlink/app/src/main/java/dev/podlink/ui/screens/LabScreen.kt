@@ -171,7 +171,7 @@ private fun BleDiagnostics() {
             Text("scan=${if (s.scanning) "on" else "off"} unfiltered=${stats.unfiltered} apple=${stats.appleFrames} pods=${stats.packets} err=${stats.lastError ?: "-"}", fontFamily = mono, fontSize = 11.sp)
             Text("expected=${svc?.scanner?.expectedModel} lock=${locked?.address ?: "-"} rssi=${locked?.rssi ?: "-"}", fontFamily = mono, fontSize = 11.sp)
             stats.beacons.values.sortedByDescending { it.rssi }.take(6).forEach { b ->
-                val isLocked = locked?.address == b.address
+                val isLocked = b.ours
                 val p = b.packet
                 Text(
                     "${if (isLocked) "★ " else ""}${b.address} ${b.model.label}(0x%04X) ${b.rssi}dBm  L${p.left ?: "–"} R${p.right ?: "–"} C${p.case ?: "–"} lid=${p.lidState.name.lowercase()}${if (p.thisPodInCase) " inCase" else ""}".format(b.rawModelId),

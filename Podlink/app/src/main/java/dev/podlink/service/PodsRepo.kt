@@ -69,13 +69,23 @@ data class PodsState(
      * and a pod beacon does not know the case, so unknown (null) components keep their last known value.
      * Lid state is only taken from frames that are broadcast from inside the case.
      */
-    fun apply(p: ProximityPacket) = copy(
+    fun apply(p: ProximityPacket): PodsState {
+        // Case battery is only meaningful in frames broadcast from inside the case; pods outside report junk/15.
+        val caseKnown = p.hasCaseContext && p.case != null
+        // A pod inside the case cannot be in an ear; its frame carries stale bits for the other pod too,
+        // so in-ear only comes from frames of pods that are outside (or "both in case" = nobody wears them).
+        val (lIn, rIn) = when {
+            p.bothInCase -> false to false
+            p.thisPodInCase -> leftInEar to rightInEar
+            else -> p.leftInEar to p.rightInEar
+        }
+        return copy(
         model = if (p.model != PodsModel.UNKNOWN) p.model else model,
-        left = p.left ?: left, right = p.right ?: right, case = p.case ?: case,
+        left = p.left ?: left, right = p.right ?: right, case = if (caseKnown) p.case else case,
         leftCharging = if (p.left != null) p.leftCharging else leftCharging,
         rightCharging = if (p.right != null) p.rightCharging else rightCharging,
-        caseCharging = if (p.case != null) p.caseCharging else caseCharging,
-        leftInEar = p.leftInEar, rightInEar = p.rightInEar,
+        caseCharging = if (caseKnown) p.caseCharging else caseCharging,
+        leftInEar = lIn, rightInEar = rIn,
         lidState = if (p.lidState != ProximityPacket.LidState.UNKNOWN) p.lidState else lidState,
         lastCaseUpdate = if (p.lidState != ProximityPacket.LidState.UNKNOWN) p.timestamp else lastCaseUpdate,
         primaryIsLeft = p.primaryIsLeft, leftIsMicrophone = p.leftIsMicrophone,
@@ -83,7 +93,8 @@ data class PodsState(
         connectionState = p.connectionState,
         rssi = p.rssi, lastUpdate = p.timestamp,
         source = if (source == Source.AAP && aapState == AapClient.State.CONNECTED) Source.AAP else Source.BLE,
-    )
+        )
+    }
 }
 
 /** Process-wide singleton bridging the foreground service and every UI surface. */

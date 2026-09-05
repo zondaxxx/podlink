@@ -265,4 +265,5 @@
     <string name="root_hint">Поделитесь библиотекой стека, чтобы подготовить патч PSM 0x1001 именно под эту прошивку.</string>
     <string name="root_share_lib">Поделиться libbluetooth.so</string>
     <string name="stats_line">Запусков сервиса: %1$d · убит системой: %2$d · последний запуск %3$s</string>
+    <string name="ev_ear">В ухе: L %1$s  R %2$s</string>
 </resources>
