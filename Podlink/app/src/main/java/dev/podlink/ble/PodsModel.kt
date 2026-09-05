@@ -54,6 +54,40 @@ enum class PodsModel(
         UNKNOWN -> Family.GENERIC
     }
 
+    /** Rated listening hours on a full pod charge (Apple spec sheets, ANC on where applicable). */
+    val listeningHours: Double get() = when (this) {
+        AIRPODS_1, AIRPODS_2 -> 5.0
+        AIRPODS_3, AIRPODS_4, AIRPODS_4_ANC -> 6.0
+        AIRPODS_PRO -> 4.5
+        AIRPODS_PRO_2, AIRPODS_PRO_2_USBC -> 6.0
+        AIRPODS_PRO_3 -> 8.0
+        AIRPODS_MAX, AIRPODS_MAX_USBC, AIRPODS_MAX_2 -> 20.0
+        POWERBEATS_PRO, POWERBEATS_PRO_2 -> 9.0
+        BEATS_FIT_PRO -> 6.0
+        BEATS_STUDIO_BUDS, BEATS_STUDIO_BUDS_PLUS -> 8.0
+        BEATS_SOLO_BUDS -> 18.0
+        BEATS_SOLO_3, BEATS_SOLO_4 -> 40.0
+        BEATS_SOLO_PRO -> 22.0
+        BEATS_STUDIO_3, BEATS_STUDIO_PRO -> 22.0
+        BEATS_X, BEATS_FLEX, POWERBEATS_3, POWERBEATS_4 -> 12.0
+        UNKNOWN -> 5.0
+    }
+
+    /** How many full pod recharges a full case holds (0 for headphones / no case). */
+    val caseRecharges: Int get() = when (kind) {
+        Kind.HEADPHONES -> 0
+        else -> when (family) {
+            Family.AIRPODS_PRO -> 5
+            Family.AIRPODS_3 -> 5
+            Family.AIRPODS_CLASSIC -> 4
+            Family.BEATS_BUDS -> 3
+            else -> 0
+        }
+    }
+
+    /** Minutes for the pods to charge from 0 to 100 % in the case (roughly 40–60 min on all models). */
+    val podFullChargeMinutes: Int get() = if (kind == Kind.HEADPHONES) 120 else 45
+
     /** Loose compatibility check used when deciding whether a beacon belongs to the connected headset. */
     fun sameFamily(other: PodsModel): Boolean =
         this == UNKNOWN || other == UNKNOWN || family == Family.GENERIC || other.family == Family.GENERIC || family == other.family

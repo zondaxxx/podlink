@@ -258,4 +258,12 @@
     <string name="companion_fail">Association failed: %1$s</string>
     <string name="export_csv">Export CSV</string>
     <string name="share_diag">Share diagnostics</string>
+
+    <string name="case_charges">≈ %1$d× recharges</string>
+    <string name="root_title">Root diagnostics</string>
+    <string name="root_yes">su found — a root mode (patched Bluetooth stack for AAP) is possible on this phone.</string>
+    <string name="root_no">No root. The Bluetooth stack library below is what would need patching for AAP.</string>
+    <string name="root_hint">Share the stack library to get a PSM 0x1001 patch prepared for exactly this firmware.</string>
+    <string name="root_share_lib">Share libbluetooth.so</string>
+    <string name="stats_line">Service starts: %1$d · killed by the system: %2$d · last start %3$s</string>
 </resources>

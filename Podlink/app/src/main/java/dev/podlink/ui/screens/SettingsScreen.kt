@@ -149,6 +149,12 @@ fun SettingsScreen(prefs: Prefs) {
             Link(stringResource(R.string.set_autostart)) { SetupLinks.openAutostart(ctx) }
             Link(stringResource(R.string.set_battery_lab)) { SetupLinks.openBatteryLab(ctx) }
             Link(stringResource(R.string.set_app_info)) { SetupLinks.openAppInfo(ctx) }
+            val stats = remember { dev.podlink.service.ServiceStats.snapshot(ctx) }
+            val fmt = remember { java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()) }
+            Text(
+                stringResource(R.string.stats_line, stats.starts, stats.killed, if (stats.lastStart > 0) fmt.format(java.util.Date(stats.lastStart)) else "–"),
+                style = MaterialTheme.typography.bodySmall, color = if (stats.killed > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Text(stringResource(R.string.xos_checklist), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 

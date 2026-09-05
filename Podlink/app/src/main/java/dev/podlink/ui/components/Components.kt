@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Hearing
 import androidx.compose.material.icons.rounded.Inventory2
@@ -86,6 +87,7 @@ fun BatteryPill(
     modifier: Modifier = Modifier,
     minutesLeft: Int? = null,
     compact: Boolean = false,
+    minutesToFull: Int? = null,
 ) {
     val w = if (compact) 44.dp else 64.dp
     val h = if (compact) 110.dp else 150.dp
@@ -133,7 +135,9 @@ fun BatteryPill(
         Spacer(Modifier.height(6.dp))
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         val ctx = androidx.compose.ui.platform.LocalContext.current
-        formatMinutes(ctx, minutesLeft)?.let {
+        if (charging && minutesToFull != null && minutesToFull > 0) {
+            Text("⚡ ≈ " + formatMinutes(ctx, minutesToFull), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        } else formatMinutes(ctx, minutesLeft)?.let {
             Text("≈ $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -206,12 +210,13 @@ fun HeroCard(state: PodsState, modifier: Modifier = Modifier, artSize: Dp = 200.
         Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
             PodsArt(s.model, s.leftInEar || s.isHeadphones, s.rightInEar || s.isHeadphones, s.lidOpen, artSize)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
+                fun eta(level: Int?): Int? = level?.let { (100 - it) * s.model.podFullChargeMinutes / 100 }
                 if (s.isHeadphones) {
-                    BatteryPill(s.single, s.leftCharging, s.model.label, minutesLeft = s.leftMinutes)
+                    BatteryPill(s.single, s.leftCharging, s.model.label, minutesLeft = s.leftMinutes, minutesToFull = eta(s.single))
                 } else {
-                    BatteryPill(s.left, s.leftCharging, stringResource(R.string.left), minutesLeft = s.leftMinutes)
-                    BatteryPill(s.case, s.caseCharging, stringResource(R.string.case_), minutesLeft = null, compact = true)
-                    BatteryPill(s.right, s.rightCharging, stringResource(R.string.right), minutesLeft = s.rightMinutes)
+                    BatteryPill(s.left, s.leftCharging, stringResource(R.string.left), minutesLeft = s.leftMinutes, minutesToFull = eta(s.left))
+                    BatteryPill(s.case, s.caseCharging, stringResource(R.string.case_), minutesLeft = null, compact = true, minutesToFull = s.case?.let { (100 - it) * 90 / 100 })
+                    BatteryPill(s.right, s.rightCharging, stringResource(R.string.right), minutesLeft = s.rightMinutes, minutesToFull = eta(s.right))
                 }
             }
             StatusChips(s)
@@ -238,6 +243,10 @@ fun StatusChips(s: PodsState) {
             ProximityPacket.ConnectionState.MUSIC -> StatusChip(stringResource(R.string.state_music), Icons.Rounded.MusicNote, active = true)
             ProximityPacket.ConnectionState.CALL, ProximityPacket.ConnectionState.RINGING -> StatusChip(stringResource(R.string.state_call), Icons.Rounded.Phone, active = true)
             else -> {}
+        }
+        if (!s.isHeadphones && s.case != null && s.model.caseRecharges > 0) {
+            val charges = s.case * s.model.caseRecharges / 100
+            StatusChip(stringResource(R.string.case_charges, charges), Icons.Rounded.BatteryChargingFull)
         }
         s.rssi?.let { SignalBars(it) }
     }

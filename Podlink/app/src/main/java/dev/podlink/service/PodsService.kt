@@ -99,6 +99,7 @@ class PodsService : Service() {
         super.onCreate()
         Notifications.ensureChannels(this)
         Notifications.cancelTapToStart(this)
+        ServiceStats.onServiceCreate(this)
         prefs = Prefs(this)
         db = HistoryDb(this)
         media = MediaController(this)
@@ -147,6 +148,7 @@ class PodsService : Service() {
         scanner.stop()
         monitor.stop()
         scope.cancel()
+        ServiceStats.onServiceDestroy(this)
         super.onDestroy()
     }
 

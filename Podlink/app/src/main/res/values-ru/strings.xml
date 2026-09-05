@@ -257,4 +257,12 @@
     <string name="companion_fail">Не удалось привязать: %1$s</string>
     <string name="export_csv">Экспорт CSV</string>
     <string name="share_diag">Поделиться диагностикой</string>
+
+    <string name="case_charges">≈ %1$d× зарядок</string>
+    <string name="root_title">Root-диагностика</string>
+    <string name="root_yes">su найден — на этом телефоне возможен root-режим (пропатченный Bluetooth-стек для AAP).</string>
+    <string name="root_no">Root нет. Библиотека стека ниже — то, что пришлось бы патчить для AAP.</string>
+    <string name="root_hint">Поделитесь библиотекой стека, чтобы подготовить патч PSM 0x1001 именно под эту прошивку.</string>
+    <string name="root_share_lib">Поделиться libbluetooth.so</string>
+    <string name="stats_line">Запусков сервиса: %1$d · убит системой: %2$d · последний запуск %3$s</string>
 </resources>

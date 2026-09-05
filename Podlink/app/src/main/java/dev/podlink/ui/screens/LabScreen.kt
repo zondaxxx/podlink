@@ -53,6 +53,7 @@ fun LabScreen() {
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(stringResource(R.string.lab_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         BleDiagnostics()
+        RootCard()
         var aapOpen by remember { mutableStateOf(s.aapState == AapClient.State.CONNECTED) }
         Card(onClick = { aapOpen = !aapOpen }) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -131,6 +132,27 @@ fun LabScreen() {
                 }
                 log.asReversed().forEach { Text(it, fontFamily = FontFamily.Monospace, fontSize = 11.sp) }
             }
+        }
+    }
+}
+
+@Composable
+private fun RootCard() {
+    val ctx = LocalContext.current
+    val su = remember { dev.podlink.util.RootDiag.suAvailable() }
+    val libs = remember { dev.podlink.util.RootDiag.libInfo() }
+    var msg by remember { mutableStateOf<String?>(null) }
+    Card {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(stringResource(R.string.root_title), fontWeight = FontWeight.SemiBold)
+            Text(stringResource(if (su) R.string.root_yes else R.string.root_no), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(dev.podlink.util.RootDiag.fingerprint(), fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+            libs.forEach { Text("${it.path}  ${it.size / 1024} KB${if (it.readable) "" else "  (needs su)"}", fontFamily = FontFamily.Monospace, fontSize = 10.sp) }
+            Text(stringResource(R.string.root_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(enabled = libs.isNotEmpty(), onClick = { msg = dev.podlink.util.RootDiag.shareLib(ctx) }) { Text(stringResource(R.string.root_share_lib)) }
+            }
+            msg?.takeIf { it != "ok" }?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }
