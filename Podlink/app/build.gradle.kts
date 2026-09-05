@@ -1,3 +1,12 @@
+import java.util.Properties
+
+// Release signing comes from keystore/keystore.properties (git-ignored):
+//   storeFile=podlink.jks  storePassword=…  keyAlias=…  keyPassword=…
+val ksProps = Properties().apply {
+    val f = rootProject.file("keystore/keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -19,10 +28,12 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("../keystore/podlink.jks")
-            storePassword = "podlink"
-            keyAlias = "podlink"
-            keyPassword = "podlink"
+            if (ksProps.isNotEmpty()) {
+                storeFile = rootProject.file("keystore/" + ksProps.getProperty("storeFile"))
+                storePassword = ksProps.getProperty("storePassword")
+                keyAlias = ksProps.getProperty("keyAlias")
+                keyPassword = ksProps.getProperty("keyPassword")
+            }
         }
     }
 

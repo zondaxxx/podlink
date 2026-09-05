@@ -54,6 +54,6 @@
 - `service/PodsService.kt` — foreground-сервис типа connectedDevice, вся логика. `service/Watchdog.kt`, `service/BootReceiver.kt` — выживание под XOS. `service/StatusIcon.kt` — иконка с процентами. `service/Notifications.kt` — каналы «подключены» / «ожидание» / «тихое ожидание», троттлинг постов.
 - `ui/` — Compose: главная (hero-карточка с анимированной графикой, пилюли заряда, чипы состояния, быстрые действия), попап, история, лаборатория, настройки, онбординг.
 
-Сборка: `cd Podlink && JAVA_HOME=<jdk17> ./gradlew assembleRelease`. Ключ подписи `Podlink/keystore/podlink.jks` (пароль `podlink`).
+Сборка: `cd Podlink && JAVA_HOME=<jdk17> ./gradlew assembleRelease`. Ключ подписи и пароли лежат локально в `Podlink/keystore/` (папка в `.gitignore`); без них собирается debug-сборка `assembleDebug`.
 
 Если хочется реальные фото наушников: положить PNG в `Podlink/app/src/main/res/drawable-nodpi/` с именем `pods_airpods_pro.png` (или `pods_airpods_classic`, `pods_airpods_3`, `pods_airpods_max`, `pods_beats_buds`, `pods_beats_over`, `pods_beats_neck`), приложение подхватит их вместо векторной картинки.
