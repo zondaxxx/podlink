@@ -205,13 +205,14 @@ fun SectionCard(title: String? = null, modifier: Modifier = Modifier, content: @
 
 /** Product art + battery pills + status chips. Everything animates when the state changes. */
 @Composable
-fun HeroCard(state: PodsState, modifier: Modifier = Modifier, artSize: Dp = 200.dp) {
+fun HeroCard(state: PodsState, modifier: Modifier = Modifier, artSize: Dp = 200.dp, video: Boolean = true) {
     val s = state
     Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
         var shine by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
         androidx.compose.runtime.LaunchedEffect(s.connected) { if (s.connected) shine++ }
         Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            PodsArt(
+            if (video && hasVideo(s.model)) ConnectedVideo(Modifier.fillMaxWidth())
+            else PodsArt(
                 s.model, s.leftInEar || s.isHeadphones, s.rightInEar || s.isHeadphones, s.lidOpen, artSize,
                 charging = s.leftCharging || s.rightCharging || s.caseCharging, shineTrigger = shine,
             )

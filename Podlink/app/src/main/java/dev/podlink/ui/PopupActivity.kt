@@ -81,6 +81,7 @@ class PopupActivity : ComponentActivity() {
         val lock = intent.getBooleanExtra("lock", true)
         val theme = intent.getStringExtra("theme") ?: "system"
         val dynamic = intent.getBooleanExtra("dynamic", true)
+        val video = intent.getBooleanExtra("video", true)
         if (lock && Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(true); setTurnScreenOn(true) }
         val filter = IntentFilter(PodsService.ACTION_POPUP_DISMISS)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(dismissReceiver, filter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(dismissReceiver, filter)
@@ -138,7 +139,8 @@ class PopupActivity : ComponentActivity() {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 AnimatedVisibility(visible, enter = scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn()) {
-                                    PodsArt(s.model, s.leftInEar || s.isHeadphones, s.rightInEar || s.isHeadphones, lidAnim, 160.dp, charging = s.leftCharging || s.rightCharging || s.caseCharging, shineTrigger = 1)
+                                    if (video && dev.podlink.ui.components.hasVideo(s.model)) dev.podlink.ui.components.ConnectedVideo(Modifier.fillMaxWidth(), loop = true)
+                                    else PodsArt(s.model, s.leftInEar || s.isHeadphones, s.rightInEar || s.isHeadphones, lidAnim, 160.dp, charging = s.leftCharging || s.rightCharging || s.caseCharging, shineTrigger = 1)
                                 }
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
                                     if (s.isHeadphones) Staggered(visible, 0) { BatteryPill(s.single, s.leftCharging, s.model.label, compact = true) }

@@ -405,6 +405,7 @@ class PodsService : Service() {
             .putExtra("lock", settings.popupShowOnLockScreen)
             .putExtra("theme", settings.theme)
             .putExtra("dynamic", settings.dynamicColor)
+            .putExtra("video", settings.heroVideo)
         runCatching { startActivity(i) }.onFailure { Log.w(TAG, "popup blocked: $it") }
     }
 

@@ -61,6 +61,7 @@ data class Settings(
     val hideUnmatched: Boolean = false,      // hide other people's AirPods card
     val startMusicOnWear: Boolean = false,   // play when both pods go in even if we did not pause
     val voiceAnnouncements: Boolean = false, // TTS: connected + battery, low battery, charged
+    val heroVideo: Boolean = true,           // play the real connection animation on Home and in the popup
 )
 
 class Prefs(private val context: Context) {
@@ -104,6 +105,7 @@ class Prefs(private val context: Context) {
         val hideUnmatched = booleanPreferencesKey("hideUnmatched")
         val startMusicOnWear = booleanPreferencesKey("startMusicOnWear")
         val voiceAnnouncements = booleanPreferencesKey("voiceAnnouncements")
+        val heroVideo = booleanPreferencesKey("heroVideo")
     }
 
     val flow: Flow<Settings> = context.store.data.map { decode(it) }
@@ -150,6 +152,7 @@ class Prefs(private val context: Context) {
             hideUnmatched = p[K.hideUnmatched] ?: d.hideUnmatched,
             startMusicOnWear = p[K.startMusicOnWear] ?: d.startMusicOnWear,
             voiceAnnouncements = p[K.voiceAnnouncements] ?: d.voiceAnnouncements,
+            heroVideo = p[K.heroVideo] ?: d.heroVideo,
         )
     }
 
@@ -198,6 +201,7 @@ class Prefs(private val context: Context) {
             p[K.hideUnmatched] = s.hideUnmatched
             p[K.startMusicOnWear] = s.startMusicOnWear
             p[K.voiceAnnouncements] = s.voiceAnnouncements
+            p[K.heroVideo] = s.heroVideo
         }
     }
 }

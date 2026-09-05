@@ -83,6 +83,7 @@ fun SettingsScreen(prefs: Prefs) {
         Section(Icons.Rounded.Palette, stringResource(R.string.sec_appearance)) {
             Choice(stringResource(R.string.set_theme), listOf("system" to R.string.theme_system, "dark" to R.string.theme_dark, "light" to R.string.theme_light), s.theme) { set { copy(theme = it) } }
             if (Build.VERSION.SDK_INT >= 31) Toggle(stringResource(R.string.set_dynamic), stringResource(R.string.set_dynamic_desc), s.dynamicColor) { set { copy(dynamicColor = it) } }
+            Toggle(stringResource(R.string.set_hero_video), stringResource(R.string.set_hero_video_desc), s.heroVideo) { set { copy(heroVideo = it) } }
         }
 
         Section(Icons.Rounded.Notifications, stringResource(R.string.sec_notification)) {

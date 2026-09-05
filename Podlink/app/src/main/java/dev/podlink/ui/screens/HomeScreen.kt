@@ -99,7 +99,7 @@ fun HomeScreen(prefs: Prefs, onNavigate: (String) -> Unit = {}, openRadar: Boole
         if (s.nearbyNotConnected && !s.connected) Banner(Icons.Rounded.Bluetooth, stringResource(R.string.status_nearby), stringResource(R.string.btn_connect)) {
             ctx.startService(Intent(ctx, PodsService::class.java).setAction(PodsService.ACTION_CONNECT_NOW))
         }
-        HeroCard(s)
+        HeroCard(s, video = settings.heroVideo)
         QuickActions(s, radarOpen, onRadar = { radarOpen = !radarOpen }, onNavigate = onNavigate)
         if (s.connected && s.aapState == AapClient.State.CONNECTED) AncCard(s)
         if (s.conversationLevel != null && s.conversationLevel!! <= 3) Banner(Icons.Rounded.Hearing, stringResource(R.string.conversation_now), null) {}
