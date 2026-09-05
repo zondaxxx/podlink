@@ -1,0 +1,11 @@
+# build output
+Podlink/.gradle/
+Podlink/build/
+Podlink/app/build/
+Podlink/local.properties
+Podlink/.idea/
+*.iml
+.DS_Store
+# signing key stays local; release APKs are attached to GitHub Releases
+Podlink/keystore/
+*.apk

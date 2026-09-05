@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="connect" android:enabled="true" android:icon="@drawable/ic_pods"
+        android:shortcutShortLabel="@string/sc_connect" android:shortcutLongLabel="@string/sc_connect_long">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="dev.podlink" android:targetClass="dev.podlink.ShortcutActivity">
+            <extra android:name="action" android:value="connect" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="find" android:enabled="true" android:icon="@drawable/ic_pods"
+        android:shortcutShortLabel="@string/sc_find" android:shortcutLongLabel="@string/sc_find_long">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="dev.podlink" android:targetClass="dev.podlink.MainActivity">
+            <extra android:name="find" android:value="true" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="popup" android:enabled="true" android:icon="@drawable/ic_pods"
+        android:shortcutShortLabel="@string/sc_popup" android:shortcutLongLabel="@string/sc_popup_long">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="dev.podlink" android:targetClass="dev.podlink.ShortcutActivity">
+            <extra android:name="action" android:value="popup" />
+        </intent>
+    </shortcut>
+</shortcuts>
