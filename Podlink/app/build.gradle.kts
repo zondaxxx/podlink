@@ -21,8 +21,8 @@ android {
         applicationId = "dev.podlink"
         minSdk = 26
         targetSdk = 36
-        versionCode = 13
-        versionName = "0.9.4"
+        versionCode = 14
+        versionName = "0.9.5"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -72,5 +72,6 @@ dependencies {
     implementation("androidx.glance:glance-material3:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:6.1")
+    implementation("org.tukaani:xz:1.10")
     testImplementation("junit:junit:4.13.2")
 }

@@ -29,8 +29,50 @@ object ElfScan {
         val hex: String get() = bytes?.joinToString(" ") { "%02X".format(it) } ?: ""
     }
 
+    /**
+     * Parses an in-memory ELF (the mini debug info) and returns the symbol. Its `st_value` is a virtual
+     * address of the *original* library, so the caller resolves the file offset against the real file.
+     */
+    private fun findInBuffer(elf: ByteArray, needle: String): Symbol? = runCatching {
+        val buf = ByteBuffer.wrap(elf).order(ByteOrder.LITTLE_ENDIAN)
+        if (elf.size < 64 || elf[0] != 0x7F.toByte()) return null
+        val shoff = buf.getLong(0x28)
+        val shentsize = buf.getShort(0x3A).toInt() and 0xFFFF
+        val shnum = buf.getShort(0x3C).toInt() and 0xFFFF
+        for (i in 0 until shnum) {
+            val b = (shoff + i * shentsize).toInt()
+            val type = buf.getInt(b + 0x04)
+            if (type != 2 && type != 11) continue
+            val off = buf.getLong(b + 0x18).toInt()
+            val size = buf.getLong(b + 0x20).toInt()
+            val link = buf.getInt(b + 0x28)
+            val entsize = buf.getLong(b + 0x38).toInt()
+            if (entsize <= 0 || size <= 0) continue
+            val sb2 = (shoff + link * shentsize).toInt()
+            val strOff = buf.getLong(sb2 + 0x18).toInt()
+            val strSize = buf.getLong(sb2 + 0x20).toInt()
+            for (k in 0 until size / entsize) {
+                val sym = off + k * entsize
+                val nameOff = buf.getInt(sym)
+                if (nameOff <= 0 || strOff + nameOff >= strOff + strSize) continue
+                val sbn = StringBuilder()
+                var p = strOff + nameOff
+                while (p < elf.size) { val c = elf[p].toInt(); if (c == 0) break; sbn.append(c.toChar()); p++ }
+                val name = sbn.toString()
+                if (!name.contains(needle)) continue
+                val value = buf.getLong(sym + 0x08)
+                if (value == 0L) continue
+                return Symbol(name, value, buf.getLong(sym + 0x10), value)
+            }
+        }
+        null
+    }.getOrNull()
+
     /** ARM64: `mov w0, #1; ret` is what a patched (always-allow) function looks like. */
     private val ALWAYS_TRUE = byteArrayOf(0x20, 0x00, 0x80.toByte(), 0x52, 0xC0.toByte(), 0x03, 0x5F, 0xD6.toByte())
+
+    /** Section names we care about; the mini debug info is an XZ-compressed ELF with a full .symtab. */
+    private const val GNU_DEBUGDATA = ".gnu_debugdata"
 
     fun inspect(path: String, symbolSubstring: String = "l2c_fcr_chk_chan_modes", byteCount: Int = 48): Result {
         val f = File(path)
@@ -105,10 +147,36 @@ object ElfScan {
                     if (found != null) break
                 }
 
-                if (found == null) return@use Result(path, f.length(), null, null, "not found", "symbol $symbolSubstring absent (stripped or renamed)")
-                val n = byteCount.coerceAtMost(if (found.size > 0) found.size.toInt() else byteCount)
+                if (found == null) {
+                    // Release builds strip .symtab but keep a compressed copy of it in .gnu_debugdata.
+                    val names = secs.getOrNull(hdr.getShort(0x3E).toInt() and 0xFFFF)
+                    if (names != null) {
+                        val nameBuf = read(names.off, names.size.toInt().coerceAtMost(1 shl 20))
+                        for (i in 0 until shnum) {
+                            val nameOff = table.getInt(i * shentsize)
+                            if (nameOff <= 0 || nameOff >= nameBuf.capacity()) continue
+                            val sb = StringBuilder()
+                            var p2 = nameOff
+                            while (p2 < nameBuf.capacity()) {
+                                val c = nameBuf.get(p2).toInt(); if (c == 0) break; sb.append(c.toChar()); p2++
+                            }
+                            if (sb.toString() != GNU_DEBUGDATA) continue
+                            val sec = secs[i]
+                            val packed = ByteArray(sec.size.toInt()).also { raf.seek(sec.off); raf.readFully(it) }
+                            val mini = runCatching {
+                                org.tukaani.xz.XZInputStream(java.io.ByteArrayInputStream(packed)).use { it.readBytes() }
+                            }.getOrNull() ?: break
+                            found = findInBuffer(mini, symbolSubstring)
+                            break
+                        }
+                    }
+                }
+                if (found == null) return@use Result(path, f.length(), null, null, "not found", "symbol $symbolSubstring absent (stripped)")
+                val host = secs.firstOrNull { it.addr != 0L && found!!.vaddr >= it.addr && found!!.vaddr < it.addr + it.size }
+                if (host != null) found = found!!.copy(fileOffset = host.off + (found!!.vaddr - host.addr))
+                val n = byteCount.coerceAtMost(if (found!!.size > 0) found!!.size.toInt() else byteCount)
                 val code = ByteArray(n)
-                raf.seek(found.fileOffset)
+                raf.seek(found!!.fileOffset)
                 raf.readFully(code)
                 val patched = code.size >= 8 && code.copyOfRange(0, 8).contentEquals(ALWAYS_TRUE)
                 Result(path, f.length(), found, code, if (patched) "patched" else "stock")

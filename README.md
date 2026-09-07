@@ -1,6 +1,6 @@
 # Podlink — управление AirPods на Android без root
 
-Готовый APK лежит рядом с этим файлом: `Podlink-0.9.4-release.apk` (подписан своим ключом, ставится поверх предыдущих версий).
+Готовый APK лежит рядом с этим файлом: `Podlink-0.9.5-release.apk` (подписан своим ключом, ставится поверх предыдущих версий).
 
 Исходники: папка `Podlink/` (Kotlin, Jetpack Compose, Material You, minSdk 26, targetSdk 36 / Android 16).
 
@@ -43,7 +43,7 @@
 
 ## Установка на Infinix Note 60 Ultra (XOS 16)
 
-1. Установить `Podlink-0.9.4-release.apk`.
+1. Установить `Podlink-0.9.5-release.apk`.
 2. Пройти три шага: Bluetooth + уведомления, «поверх других приложений», батарея без ограничений.
 3. Phone Master → автозапуск: включить Podlink. Battery Lab → Power Marathon → выключить «Screen off push block».
 4. В онбординге нажать «Привязать как устройство-компаньон» и подтвердить AirPods в системном диалоге.
