@@ -147,6 +147,8 @@ private fun RootCard() {
             Text(stringResource(R.string.root_title), fontWeight = FontWeight.SemiBold)
             Text(stringResource(if (su) R.string.root_yes else R.string.root_no), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(dev.podlink.util.RootDiag.fingerprint(), fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+            Text(stringResource(R.string.bt_module, dev.podlink.util.RootDiag.bluetoothModuleVersion(ctx)), fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
+            Text(stringResource(R.string.bt_module_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             libs.forEach { Text("${it.path}  ${it.size / 1024} KB${if (it.readable) "" else "  (needs su)"}", fontFamily = FontFamily.Monospace, fontSize = 10.sp) }
             Text(stringResource(R.string.root_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

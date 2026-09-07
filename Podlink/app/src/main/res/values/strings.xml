@@ -269,4 +269,6 @@
     <string name="ev_ear">In ear: L %1$s  R %2$s</string>
     <string name="set_hero_video">Real connection animation</string>
     <string name="set_hero_video_desc">The AirPods Pro video on Home and in the popup (off = rendered image with 3D lid)</string>
+    <string name="bt_module">Bluetooth module: %1$s</string>
+    <string name="bt_module_hint">The L2CAP fix for AirPods (Google issue 371713238) ships inside this Mainline module through Google Play system updates (Android 16 QPR3 train). When the version grows after an update, press Retry in the AAP section.</string>
 </resources>

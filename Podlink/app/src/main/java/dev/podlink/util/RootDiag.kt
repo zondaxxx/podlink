@@ -28,6 +28,29 @@ object RootDiag {
 
     data class LibInfo(val path: String, val size: Long, val readable: Boolean)
 
+    /**
+     * Version of the Bluetooth Mainline module. The L2CAP fix for AirPods (Google issue 371713238) ships
+     * inside this module via Google Play system updates (Android 16 QPR3 train), so a rising version here
+     * is the signal to retry AAP without root.
+     */
+    fun bluetoothModuleVersion(context: Context): String {
+        val pm = context.packageManager
+        val names = listOf("com.android.btservices", "com.android.bluetooth", "com.google.android.bluetooth")
+        for (n in names) {
+            val info = runCatching {
+                if (Build.VERSION.SDK_INT >= 29) pm.getPackageInfo(n, android.content.pm.PackageManager.MATCH_APEX) else pm.getPackageInfo(n, 0)
+            }.getOrNull() ?: continue
+            val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
+            return "$n ${info.versionName ?: "?"} ($code)"
+        }
+        return "?"
+    }
+
+    fun playSystemUpdate(): String = runCatching {
+        val m = Class.forName("android.os.SystemProperties").getMethod("get", String::class.java)
+        (m.invoke(null, "ro.build.version.security_patch") as String).ifBlank { "?" }
+    }.getOrDefault("?")
+
     fun libInfo(): List<LibInfo> = LIB_PATHS.map { File(it) }.filter { it.exists() }.map { LibInfo(it.path, it.length(), it.canRead()) }
 
     /** Copies the stack library to the app cache (directly, or through `su cat` when not readable) and returns a shareable URI. */

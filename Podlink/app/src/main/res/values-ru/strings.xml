@@ -268,4 +268,6 @@
     <string name="ev_ear">В ухе: L %1$s  R %2$s</string>
     <string name="set_hero_video">Настоящая анимация подключения</string>
     <string name="set_hero_video_desc">Видео AirPods Pro на главной и в попапе (выкл = рендер с 3D-крышкой)</string>
+    <string name="bt_module">Модуль Bluetooth: %1$s</string>
+    <string name="bt_module_hint">Исправление L2CAP для AirPods (Google issue 371713238) приходит внутри этого Mainline-модуля через обновления системы Google Play (ветка Android 16 QPR3). Когда версия вырастет после обновления, нажмите «Повторить» в секции AAP.</string>
 </resources>
