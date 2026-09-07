@@ -275,4 +275,6 @@
     <string name="bt_unknown">Не удалось определить, обновляемый ли модуль Bluetooth.</string>
     <string name="bt_no_module">Пакет модуля Bluetooth не найден</string>
     <string name="lib_hidden">libbluetooth*.so не виден приложениям на этой прошивке (нужен root, чтобы прочитать).</string>
+    <string name="bt_vendor">Модуль Bluetooth собран производителем, а не поставлен Google: код версии равен уровню API вместо номера ветки Mainline. Обновления системы Google Play заменяют только модули самого Google, поэтому исправление L2CAP для AirPods придёт сюда лишь с прошивкой от Infinix или с Android 17.</string>
+    <string name="bt_mainline">Mainline: %1$d из %2$d модулей обновлено через Play</string>
 </resources>

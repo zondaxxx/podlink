@@ -276,4 +276,6 @@
     <string name="bt_unknown">Could not tell whether the Bluetooth module is updatable.</string>
     <string name="bt_no_module">No Bluetooth module package visible</string>
     <string name="lib_hidden">libbluetooth*.so is not visible to apps on this ROM (needs root to read).</string>
+    <string name="bt_vendor">The Bluetooth module was built by the vendor, not shipped by Google: its version code is the plain API level instead of a Mainline train number. Google Play system updates replace only Google\'s own modules, so the AirPods L2CAP fix can reach this phone only through an Infinix firmware update or Android 17.</string>
+    <string name="bt_mainline">Mainline: %1$d of %2$d modules updated by Play</string>
 </resources>

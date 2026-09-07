@@ -20,15 +20,14 @@ import java.security.MessageDigest
  */
 object RootDiag {
 
+    /** Fallbacks; the real directory is derived from the module's own APEX root at runtime. */
     private val LIB_DIRS = listOf(
         "/apex/com.android.btservices/lib64",
+        "/apex/com.android.bt/lib64",
         "/apex/com.android.bluetooth/lib64",
         "/apex/com.google.android.btservices/lib64",
         "/system/lib64",
         "/system_ext/lib64",
-        "/vendor/lib64",
-        "/apex/com.android.btservices/lib",
-        "/system/lib",
     )
 
     private val MODULE_PACKAGES = listOf(
@@ -79,32 +78,58 @@ object RootDiag {
         }
     }
 
-    enum class Verdict { UPDATABLE, BUILT_IN, UNKNOWN }
+    enum class Verdict { UPDATABLE, VENDOR_BUILT, BUILT_IN, UNKNOWN }
 
-    /** Can this phone still receive the L2CAP fix through Google Play system updates? */
+    /**
+     * Can this phone still receive the L2CAP fix through Google Play system updates?
+     *
+     * Play only replaces modules that Google itself signed and shipped (`com.google.android.*`, or an
+     * AOSP-named module enrolled in the Mainline train, whose version code is a nine-digit train number).
+     * A module the vendor built from AOSP source carries the platform SDK level as its version code and
+     * can only ever change with a full firmware OTA.
+     */
     fun verdict(context: Context): Verdict {
         val mods = modules(context)
         if (mods.isEmpty()) return Verdict.UNKNOWN
         return when {
             mods.any { it.looksUpdatable } -> Verdict.UPDATABLE
-            mods.any { it.isApex } -> Verdict.UNKNOWN     // apex present but never updated yet
+            mods.any { it.isApex } -> Verdict.VENDOR_BUILT
             else -> Verdict.BUILT_IN
         }
     }
 
-    /** Directories under /apex that exist, useful to see how the ROM is put together. */
-    fun apexDirs(): List<String> = runCatching {
-        File("/apex").listFiles()?.filter { it.isDirectory }?.map { it.name }?.filter { it.contains("bt") || it.contains("bluetooth") } ?: emptyList()
-    }.getOrDefault(emptyList())
+    /** How many Mainline modules on this phone have actually been updated by Google Play, out of how many. */
+    fun mainlineStats(context: Context): Pair<Int, Int> {
+        val pm = context.packageManager
+        val flags = (if (Build.VERSION.SDK_INT >= 29) PackageManager.MATCH_APEX else 0) or PackageManager.MATCH_UNINSTALLED_PACKAGES
+        val all = runCatching { pm.getInstalledPackages(flags) }.getOrNull() ?: return 0 to 0
+        val apexes = all.filter { it.applicationInfo?.sourceDir?.startsWith("/apex/") == true || it.applicationInfo?.sourceDir?.startsWith("/data/apex/") == true }
+        val updated = apexes.count { p ->
+            val src = p.applicationInfo?.sourceDir ?: ""
+            val code = if (Build.VERSION.SDK_INT >= 28) p.longVersionCode else @Suppress("DEPRECATION") p.versionCode.toLong()
+            src.startsWith("/data/apex/") || code > 300_000_000L
+        }
+        return updated to apexes.size
+    }
+
+    /** The APEX root a module is mounted at, e.g. /apex/com.android.bt — /apex itself is not listable by apps. */
+    private fun apexRoot(sourceDir: String): String? {
+        if (!sourceDir.startsWith("/apex/")) return null
+        val parts = sourceDir.split("/")
+        return if (parts.size > 2) "/apex/" + parts[2] else null
+    }
+
+    fun apexDirs(context: Context): List<String> = modules(context).mapNotNull { apexRoot(it.sourceDir) }.distinct()
 
     // ---- the stack library ------------------------------------------------------------------------
 
     data class LibInfo(val path: String, val size: Long, val readable: Boolean)
 
-    /** Every libbluetooth*.so we can see, in every plausible directory. */
-    fun libInfo(): List<LibInfo> {
+    /** Every libbluetooth*.so we can see, starting with the directory of the actual Bluetooth module. */
+    fun libInfo(context: Context? = null): List<LibInfo> {
         val out = LinkedHashMap<String, LibInfo>()
-        for (dir in LIB_DIRS) {
+        val fromModule = context?.let { c -> modules(c).mapNotNull { apexRoot(it.sourceDir) }.flatMap { listOf("$it/lib64", "$it/lib") } } ?: emptyList()
+        for (dir in fromModule + LIB_DIRS) {
             val d = File(dir)
             // Direct hits first: listFiles() returns null when the directory is not listable for apps.
             val direct = listOf("libbluetooth.so", "libbluetooth_jni.so", "libbluetooth_core.so", "libbluetooth-core.so")
@@ -115,12 +140,13 @@ object RootDiag {
             val listed = runCatching { d.listFiles { _, name -> name.startsWith("libbluetooth") && name.endsWith(".so") } }.getOrNull()
             listed?.forEach { f -> out[f.path] = LibInfo(f.path, f.length(), f.canRead()) }
         }
-        return out.values.toList()
+        // MediaTek ships a pile of unrelated libbluetooth_* helpers in /vendor; the stack itself is the big one.
+        return out.values.sortedWith(compareByDescending<LibInfo> { it.path.startsWith("/apex/") }.thenByDescending { it.size })
     }
 
     /** Copies the stack library to the app cache (directly, or through `su cat`) and returns a shareable URI. */
     fun collectLib(context: Context): Result<Pair<Uri, String>> = runCatching {
-        val src = libInfo().sortedByDescending { it.size }.firstOrNull() ?: error("libbluetooth*.so not visible to apps on this ROM")
+        val src = libInfo(context).firstOrNull { it.readable || suAvailable() } ?: error("libbluetooth*.so not visible to apps on this ROM")
         val file = File(src.path)
         val dir = File(context.cacheDir, "share").apply { mkdirs() }
         val dst = File(dir, file.name)
@@ -151,9 +177,12 @@ object RootDiag {
         appendLine(fingerprint())
         appendLine("su: ${suAvailable()}")
         appendLine("verdict: ${verdict(context)}")
+        val (upd, total) = mainlineStats(context)
+        appendLine("mainline: $upd of $total modules updated by Play")
         modules(context).forEach { appendLine("module: ${it.line}  ${it.sourceDir}") }
-        appendLine("apex dirs: ${apexDirs().joinToString(", ").ifEmpty { "none visible" }}")
-        libInfo().forEach { appendLine("lib: ${it.path} ${it.size / 1024}KB readable=${it.readable}") }
-        if (libInfo().isEmpty()) appendLine("lib: none visible to apps")
+        appendLine("apex roots: ${apexDirs(context).joinToString(", ").ifEmpty { "none" }}")
+        val libs = libInfo(context)
+        libs.forEach { appendLine("lib: ${it.path} ${it.size / 1024}KB readable=${it.readable}") }
+        if (libs.isEmpty()) appendLine("lib: none visible to apps")
     }
 }

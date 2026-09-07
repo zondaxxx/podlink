@@ -143,10 +143,11 @@ fun LabScreen() {
 private fun RootCard() {
     val ctx = LocalContext.current
     val su = remember { dev.podlink.util.RootDiag.suAvailable() }
-    val libs = remember { dev.podlink.util.RootDiag.libInfo() }
+    val libs = remember { dev.podlink.util.RootDiag.libInfo(ctx) }
     val modules = remember { dev.podlink.util.RootDiag.modules(ctx) }
     val verdict = remember { dev.podlink.util.RootDiag.verdict(ctx) }
-    val apex = remember { dev.podlink.util.RootDiag.apexDirs() }
+    val apex = remember { dev.podlink.util.RootDiag.apexDirs(ctx) }
+    val mainline = remember { dev.podlink.util.RootDiag.mainlineStats(ctx) }
     var msg by remember { mutableStateOf<String?>(null) }
     val mono = FontFamily.Monospace
     Card {
@@ -158,6 +159,7 @@ private fun RootCard() {
             // Can this ROM still receive the L2CAP fix through Google Play system updates?
             val (verdictText, verdictColor) = when (verdict) {
                 dev.podlink.util.RootDiag.Verdict.UPDATABLE -> stringResource(R.string.bt_updatable) to MaterialTheme.colorScheme.primary
+                dev.podlink.util.RootDiag.Verdict.VENDOR_BUILT -> stringResource(R.string.bt_vendor) to MaterialTheme.colorScheme.error
                 dev.podlink.util.RootDiag.Verdict.BUILT_IN -> stringResource(R.string.bt_builtin) to MaterialTheme.colorScheme.error
                 else -> stringResource(R.string.bt_unknown) to MaterialTheme.colorScheme.onSurface
             }
@@ -165,6 +167,7 @@ private fun RootCard() {
             modules.forEach { Text(it.line, fontFamily = mono, fontSize = 10.sp) }
             if (modules.isEmpty()) Text(stringResource(R.string.bt_no_module), fontFamily = mono, fontSize = 10.sp)
             if (apex.isNotEmpty()) Text("apex: " + apex.joinToString(", "), fontFamily = mono, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.bt_mainline, mainline.first, mainline.second), fontFamily = mono, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(stringResource(R.string.bt_module_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             libs.forEach { Text("${it.path}  ${it.size / 1024} KB${if (it.readable) "" else "  (needs su)"}", fontFamily = mono, fontSize = 10.sp) }
