@@ -144,6 +144,12 @@ object RootDiag {
         return out.values.sortedWith(compareByDescending<LibInfo> { it.path.startsWith("/apex/") }.thenByDescending { it.size })
     }
 
+    /** Looks inside the ROM's Bluetooth stack for the function that breaks AirPods L2CAP. */
+    fun inspectStack(context: Context): ElfScan.Result? {
+        val lib = libInfo(context).firstOrNull { it.readable && it.size > 1_000_000 } ?: libInfo(context).firstOrNull() ?: return null
+        return ElfScan.inspect(lib.path)
+    }
+
     /** Copies the stack library to the app cache (directly, or through `su cat`) and returns a shareable URI. */
     fun collectLib(context: Context): Result<Pair<Uri, String>> = runCatching {
         val src = libInfo(context).firstOrNull { it.readable || suAvailable() } ?: error("libbluetooth*.so not visible to apps on this ROM")
@@ -184,5 +190,10 @@ object RootDiag {
         val libs = libInfo(context)
         libs.forEach { appendLine("lib: ${it.path} ${it.size / 1024}KB readable=${it.readable}") }
         if (libs.isEmpty()) appendLine("lib: none visible to apps")
+        inspectStack(context)?.let { r ->
+            appendLine("stack: ${r.verdict}${r.error?.let { e -> " ($e)" } ?: ""}")
+            r.symbol?.let { sym -> appendLine("sym: ${sym.name} vaddr=0x%x size=%d off=0x%x".format(sym.vaddr, sym.size, sym.fileOffset)) }
+            if (r.hex.isNotEmpty()) appendLine("code: ${r.hex}")
+        }
     }
 }

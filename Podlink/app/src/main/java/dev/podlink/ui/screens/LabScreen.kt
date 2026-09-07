@@ -26,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +37,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.podlink.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import dev.podlink.aap.AapClient
 import dev.podlink.service.PodsRepo
 import dev.podlink.service.PodsService
@@ -149,6 +153,9 @@ private fun RootCard() {
     val apex = remember { dev.podlink.util.RootDiag.apexDirs(ctx) }
     val mainline = remember { dev.podlink.util.RootDiag.mainlineStats(ctx) }
     var msg by remember { mutableStateOf<String?>(null) }
+    var scan by remember { mutableStateOf<dev.podlink.util.ElfScan.Result?>(null) }
+    var scanning by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val mono = FontFamily.Monospace
     Card {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -173,7 +180,22 @@ private fun RootCard() {
             libs.forEach { Text("${it.path}  ${it.size / 1024} KB${if (it.readable) "" else "  (needs su)"}", fontFamily = mono, fontSize = 10.sp) }
             if (libs.isEmpty()) Text(stringResource(R.string.lib_hidden), fontFamily = mono, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(stringResource(R.string.root_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // The stack library is world-readable on most ROMs, so we can inspect the broken function.
+            scan?.let { r ->
+                Text(
+                    stringResource(R.string.stack_verdict, r.verdict) + (r.error?.let { " · $it" } ?: ""),
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (r.symbol != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                r.symbol?.let { sym -> Text("%s\n  vaddr 0x%x  size %d  off 0x%x".format(sym.name, sym.vaddr, sym.size, sym.fileOffset), fontFamily = mono, fontSize = 10.sp) }
+                if (r.hex.isNotEmpty()) Text(r.hex, fontFamily = mono, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(enabled = !scanning && libs.isNotEmpty(), onClick = {
+                    scanning = true
+                    scope.launch { scan = withContext(Dispatchers.IO) { dev.podlink.util.RootDiag.inspectStack(ctx) }; scanning = false }
+                }) { Text(stringResource(if (scanning) R.string.stack_scanning else R.string.stack_inspect)) }
                 OutlinedButton(enabled = libs.isNotEmpty(), onClick = { msg = dev.podlink.util.RootDiag.shareLib(ctx) }) { Text(stringResource(R.string.root_share_lib)) }
                 OutlinedButton(onClick = {
                     val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
