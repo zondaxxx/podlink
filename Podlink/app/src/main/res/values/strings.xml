@@ -271,4 +271,9 @@
     <string name="set_hero_video_desc">The AirPods Pro video on Home and in the popup (off = rendered image with 3D lid)</string>
     <string name="bt_module">Bluetooth module: %1$s</string>
     <string name="bt_module_hint">The L2CAP fix for AirPods (Google issue 371713238) ships inside this Mainline module through Google Play system updates (Android 16 QPR3 train). When the version grows after an update, press Retry in the AAP section.</string>
+    <string name="bt_updatable">Bluetooth module is updatable — the fix can arrive through Google Play system updates.</string>
+    <string name="bt_builtin">Bluetooth stack is baked into the firmware, not an updatable module. Google Play system updates will NOT bring the AirPods L2CAP fix here — only an Infinix OTA or Android 17 will.</string>
+    <string name="bt_unknown">Could not tell whether the Bluetooth module is updatable.</string>
+    <string name="bt_no_module">No Bluetooth module package visible</string>
+    <string name="lib_hidden">libbluetooth*.so is not visible to apps on this ROM (needs root to read).</string>
 </resources>

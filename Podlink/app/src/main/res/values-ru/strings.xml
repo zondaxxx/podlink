@@ -270,4 +270,9 @@
     <string name="set_hero_video_desc">Видео AirPods Pro на главной и в попапе (выкл = рендер с 3D-крышкой)</string>
     <string name="bt_module">Модуль Bluetooth: %1$s</string>
     <string name="bt_module_hint">Исправление L2CAP для AirPods (Google issue 371713238) приходит внутри этого Mainline-модуля через обновления системы Google Play (ветка Android 16 QPR3). Когда версия вырастет после обновления, нажмите «Повторить» в секции AAP.</string>
+    <string name="bt_updatable">Модуль Bluetooth обновляемый — исправление может прийти с обновлениями системы Google Play.</string>
+    <string name="bt_builtin">Bluetooth-стек вшит в прошивку, а не обновляемый модуль. Обновления системы Google Play НЕ принесут сюда исправление L2CAP для AirPods — только OTA от Infinix или Android 17.</string>
+    <string name="bt_unknown">Не удалось определить, обновляемый ли модуль Bluetooth.</string>
+    <string name="bt_no_module">Пакет модуля Bluetooth не найден</string>
+    <string name="lib_hidden">libbluetooth*.so не виден приложениям на этой прошивке (нужен root, чтобы прочитать).</string>
 </resources>

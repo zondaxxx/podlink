@@ -81,6 +81,9 @@ fun LabScreen() {
                     fontWeight = FontWeight.SemiBold,
                     color = if (connected) MaterialTheme.colorScheme.primary else if (s.aapState == AapClient.State.UNSUPPORTED) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                 )
+                if (s.aapState == AapClient.State.CONNECTING) {
+                    log.lastOrNull()?.let { Text(it, fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(enabled = s.connected && !connected, onClick = { ctx.startService(android.content.Intent(ctx, PodsService::class.java).setAction(PodsService.ACTION_AAP_RETRY)) }) { Text(stringResource(R.string.btn_retry)) }
                     OutlinedButton(enabled = connected, onClick = { svc?.aap?.disconnect() }) { Text(stringResource(R.string.btn_disconnect)) }
@@ -141,18 +144,39 @@ private fun RootCard() {
     val ctx = LocalContext.current
     val su = remember { dev.podlink.util.RootDiag.suAvailable() }
     val libs = remember { dev.podlink.util.RootDiag.libInfo() }
+    val modules = remember { dev.podlink.util.RootDiag.modules(ctx) }
+    val verdict = remember { dev.podlink.util.RootDiag.verdict(ctx) }
+    val apex = remember { dev.podlink.util.RootDiag.apexDirs() }
     var msg by remember { mutableStateOf<String?>(null) }
+    val mono = FontFamily.Monospace
     Card {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(stringResource(R.string.root_title), fontWeight = FontWeight.SemiBold)
             Text(stringResource(if (su) R.string.root_yes else R.string.root_no), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(dev.podlink.util.RootDiag.fingerprint(), fontFamily = FontFamily.Monospace, fontSize = 10.sp)
-            Text(stringResource(R.string.bt_module, dev.podlink.util.RootDiag.bluetoothModuleVersion(ctx)), fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
+            Text(dev.podlink.util.RootDiag.fingerprint(), fontFamily = mono, fontSize = 10.sp)
+
+            // Can this ROM still receive the L2CAP fix through Google Play system updates?
+            val (verdictText, verdictColor) = when (verdict) {
+                dev.podlink.util.RootDiag.Verdict.UPDATABLE -> stringResource(R.string.bt_updatable) to MaterialTheme.colorScheme.primary
+                dev.podlink.util.RootDiag.Verdict.BUILT_IN -> stringResource(R.string.bt_builtin) to MaterialTheme.colorScheme.error
+                else -> stringResource(R.string.bt_unknown) to MaterialTheme.colorScheme.onSurface
+            }
+            Text(verdictText, fontWeight = FontWeight.SemiBold, color = verdictColor, style = MaterialTheme.typography.bodyMedium)
+            modules.forEach { Text(it.line, fontFamily = mono, fontSize = 10.sp) }
+            if (modules.isEmpty()) Text(stringResource(R.string.bt_no_module), fontFamily = mono, fontSize = 10.sp)
+            if (apex.isNotEmpty()) Text("apex: " + apex.joinToString(", "), fontFamily = mono, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(stringResource(R.string.bt_module_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            libs.forEach { Text("${it.path}  ${it.size / 1024} KB${if (it.readable) "" else "  (needs su)"}", fontFamily = FontFamily.Monospace, fontSize = 10.sp) }
+
+            libs.forEach { Text("${it.path}  ${it.size / 1024} KB${if (it.readable) "" else "  (needs su)"}", fontFamily = mono, fontSize = 10.sp) }
+            if (libs.isEmpty()) Text(stringResource(R.string.lib_hidden), fontFamily = mono, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(stringResource(R.string.root_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(enabled = libs.isNotEmpty(), onClick = { msg = dev.podlink.util.RootDiag.shareLib(ctx) }) { Text(stringResource(R.string.root_share_lib)) }
+                OutlinedButton(onClick = {
+                    val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText("podlink-stack", dev.podlink.util.RootDiag.report(ctx)))
+                    Toast.makeText(ctx, R.string.log_copied, Toast.LENGTH_SHORT).show()
+                }) { Text(stringResource(R.string.copy_log)) }
             }
             msg?.takeIf { it != "ok" }?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
