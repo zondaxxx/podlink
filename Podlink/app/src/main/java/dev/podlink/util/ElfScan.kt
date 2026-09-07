@@ -27,6 +27,8 @@ object ElfScan {
         val error: String? = null,
     ) {
         val hex: String get() = bytes?.joinToString(" ") { "%02X".format(it) } ?: ""
+        /** First eight instructions, enough to see the prologue on screen. */
+        val hexShort: String get() = bytes?.take(32)?.joinToString(" ") { "%02X".format(it) } ?: ""
     }
 
     /**
@@ -68,13 +70,29 @@ object ElfScan {
         null
     }.getOrNull()
 
+    /**
+     * Fingerprints of the stock (buggy) `l2c_fcr_chk_chan_modes` on ARM64:
+     *   cmp w8, #3      1F 0D 00 71   — comparing the preferred mode against L2CAP_FCR_ERTM_MODE
+     *   mov w0, wzr     E0 03 1F 2A   — the `return false` that aborts the AirPods connection
+     */
+    private val CMP_MODE_3 = byteArrayOf(0x1F, 0x0D, 0x00, 0x71)
+    private val RET_FALSE = byteArrayOf(0xE0.toByte(), 0x03, 0x1F, 0x2A)
+
+    private fun ByteArray.contains(pattern: ByteArray): Boolean {
+        outer@ for (i in 0..size - pattern.size) {
+            for (j in pattern.indices) if (this[i + j] != pattern[j]) continue@outer
+            return true
+        }
+        return false
+    }
+
     /** ARM64: `mov w0, #1; ret` is what a patched (always-allow) function looks like. */
     private val ALWAYS_TRUE = byteArrayOf(0x20, 0x00, 0x80.toByte(), 0x52, 0xC0.toByte(), 0x03, 0x5F, 0xD6.toByte())
 
     /** Section names we care about; the mini debug info is an XZ-compressed ELF with a full .symtab. */
     private const val GNU_DEBUGDATA = ".gnu_debugdata"
 
-    fun inspect(path: String, symbolSubstring: String = "l2c_fcr_chk_chan_modes", byteCount: Int = 48): Result {
+    fun inspect(path: String, symbolSubstring: String = "l2c_fcr_chk_chan_modes", byteCount: Int = 256): Result {
         val f = File(path)
         if (!f.exists()) return Result(path, 0, null, null, "missing", "file not found")
         if (!f.canRead()) return Result(path, f.length(), null, null, "unreadable", "needs root to read")
@@ -174,12 +192,18 @@ object ElfScan {
                 if (found == null) return@use Result(path, f.length(), null, null, "not found", "symbol $symbolSubstring absent (stripped)")
                 val host = secs.firstOrNull { it.addr != 0L && found!!.vaddr >= it.addr && found!!.vaddr < it.addr + it.size }
                 if (host != null) found = found!!.copy(fileOffset = host.off + (found!!.vaddr - host.addr))
-                val n = byteCount.coerceAtMost(if (found!!.size > 0) found!!.size.toInt() else byteCount)
+                val n = byteCount.coerceAtMost(if (found!!.size > 0) found!!.size.toInt() else 64)
                 val code = ByteArray(n)
                 raf.seek(found!!.fileOffset)
                 raf.readFully(code)
                 val patched = code.size >= 8 && code.copyOfRange(0, 8).contentEquals(ALWAYS_TRUE)
-                Result(path, f.length(), found, code, if (patched) "patched" else "stock")
+                val buggy = code.contains(CMP_MODE_3) && code.contains(RET_FALSE)
+                val verdict = when {
+                    patched -> "patched"
+                    buggy -> "stock, bug present"
+                    else -> "stock, unrecognised"
+                }
+                Result(path, f.length(), found, code, verdict)
             }
         }.getOrElse { Result(path, f.length(), null, null, "error", it.message ?: it.toString()) }
     }

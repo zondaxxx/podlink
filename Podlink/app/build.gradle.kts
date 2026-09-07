@@ -21,8 +21,8 @@ android {
         applicationId = "dev.podlink"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "0.9.5"
+        versionCode = 15
+        versionName = "0.9.6"
         vectorDrawables { useSupportLibrary = true }
     }
 

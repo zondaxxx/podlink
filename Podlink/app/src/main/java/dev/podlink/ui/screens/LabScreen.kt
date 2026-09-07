@@ -189,7 +189,7 @@ private fun RootCard() {
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 r.symbol?.let { sym -> Text("%s\n  vaddr 0x%x  size %d  off 0x%x".format(sym.name, sym.vaddr, sym.size, sym.fileOffset), fontFamily = mono, fontSize = 10.sp) }
-                if (r.hex.isNotEmpty()) Text(r.hex, fontFamily = mono, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (r.hexShort.isNotEmpty()) Text(r.hexShort, fontFamily = mono, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(enabled = !scanning && libs.isNotEmpty(), onClick = {

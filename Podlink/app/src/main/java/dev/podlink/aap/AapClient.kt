@@ -3,6 +3,7 @@ package dev.podlink.aap
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.os.Build
 import android.os.ParcelUuid
 import android.util.Log
 import dev.podlink.aap.AapProtocol.toHex
@@ -82,6 +83,21 @@ class AapClient(private val scope: CoroutineScope) {
             .filter { it.parameterTypes.contains(BluetoothDevice::class.java) }
             .sortedByDescending { it.parameterCount }
         log("BluetoothSocket: ${ctors.size} usable constructors")
+        // Android 16 (API 36) has a public way to open a classic L2CAP socket, no hidden constructor needed.
+        publicSocket(device)?.let { sock ->
+            log("attempt 0: public createUsingSocketSettings(TYPE_L2CAP, psm 0x1001)")
+            val t0 = System.currentTimeMillis()
+            val watchdog = scope.launch(Dispatchers.IO) { delay(CONNECT_TIMEOUT_MS); log("  ⏱ no answer in ${CONNECT_TIMEOUT_MS / 1000}s, closing"); runCatching { sock.close() } }
+            val err = try { sock.connect(); null } catch (e: IOException) { e }
+            watchdog.cancel()
+            if (err == null) {
+                log("  ✓ L2CAP channel open after ${System.currentTimeMillis() - t0} ms via the public API")
+                onConnected(sock)
+                return@withContext true
+            }
+            log("  ✗ after ${System.currentTimeMillis() - t0} ms: ${err.message}")
+            runCatching { sock.close() }
+        }
         val variants = buildList { for (c in ctors) { add(Variant(c, true)); add(Variant(c, false)) } }
         for ((i, v) in variants.withIndex()) {
             if (_state.value != State.CONNECTING) return@withContext false
@@ -104,6 +120,26 @@ class AapClient(private val scope: CoroutineScope) {
         log("✗ All variants failed. This Bluetooth stack does not let apps reach L2CAP PSM 0x1001 → AAP needs root here.")
         _state.value = State.UNSUPPORTED
         false
+    }
+
+    /**
+     * `BluetoothDevice.createUsingSocketSettings(BluetoothSocketSettings)` — public since API 36 and the
+     * only sanctioned way to reach a classic L2CAP PSM. Built by reflection so the app still compiles and
+     * runs on older releases.
+     */
+    private fun publicSocket(device: BluetoothDevice): BluetoothSocket? {
+        if (Build.VERSION.SDK_INT < 36) return null
+        return runCatching {
+            val settingsCls = Class.forName("android.bluetooth.BluetoothSocketSettings")
+            val builderCls = Class.forName("android.bluetooth.BluetoothSocketSettings\$Builder")
+            var builder = builderCls.getConstructor().newInstance()
+            builder = builderCls.getMethod("setSocketType", Int::class.javaPrimitiveType).invoke(builder, 3)   // TYPE_L2CAP
+            builder = builderCls.getMethod("setL2capPsm", Int::class.javaPrimitiveType).invoke(builder, AapProtocol.PSM)
+            builder = builderCls.getMethod("setEncryptionRequired", Boolean::class.javaPrimitiveType).invoke(builder, false)
+            builder = builderCls.getMethod("setAuthenticationRequired", Boolean::class.javaPrimitiveType).invoke(builder, false)
+            val settings = builderCls.getMethod("build").invoke(builder)
+            BluetoothDevice::class.java.getMethod("createUsingSocketSettings", settingsCls).invoke(device, settings) as BluetoothSocket
+        }.onFailure { log("public socket API unavailable: ${it.javaClass.simpleName}: ${it.message}") }.getOrNull()
     }
 
     private suspend fun onConnected(sock: BluetoothSocket) {
